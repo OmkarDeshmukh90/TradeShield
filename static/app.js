@@ -1,6 +1,8 @@
 const TOKEN_KEY = "tradeshield_access_token";
 const API_BASE = (window.__TRADESHIELD_CONFIG__?.apiBaseUrl || "").replace(/\/+$/, "");
 const nativeFetch = window.fetch.bind(window);
+const BACKEND_WAKE_TIMEOUT_MS = 70000;
+const BACKEND_WAKE_POLL_MS = 5000;
 const DEFAULT_INDUSTRIES = [
   "Oil, Gas, and Petrochemicals",
   "Pharmaceuticals and APIs",
@@ -106,6 +108,26 @@ function withApiBase(url) {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   if (!url.startsWith("/")) return `${API_BASE}/${url}`;
   return `${API_BASE}${url}`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForBackendWake() {
+  const deadline = Date.now() + BACKEND_WAKE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      const res = await nativeFetch(withApiBase("/healthz"), { method: "GET" });
+      if (res.status < 600) {
+        return true;
+      }
+    } catch (_err) {
+      // ignore and retry until timeout
+    }
+    await sleep(BACKEND_WAKE_POLL_MS);
+  }
+  return false;
 }
 
 function setStatus(message) {
@@ -348,11 +370,23 @@ async function fetchJson(url, options = {}) {
   if (state.accessToken) {
     headers.Authorization = `Bearer ${state.accessToken}`;
   }
+  const method = String(options.method || "GET").toUpperCase();
+  const canRetryAfterWake = method === "GET" || method === "HEAD";
   let response;
   try {
     response = await nativeFetch(withApiBase(url), { ...options, headers });
   } catch (_error) {
-    throw new Error("Backend is sleeping or unavailable. Wait 30-60 seconds and retry.");
+    if (canRetryAfterWake) {
+      setStatus("Backend is waking up. Please wait...");
+      const woke = await waitForBackendWake();
+      if (woke) {
+        response = await nativeFetch(withApiBase(url), { ...options, headers });
+      } else {
+        throw new Error("Backend is sleeping or unavailable. Wait 30-60 seconds and retry.");
+      }
+    } else {
+      throw new Error("Backend is sleeping or unavailable. Wait 30-60 seconds and retry.");
+    }
   }
   if (!response.ok) {
     const text = await response.text();
@@ -1081,6 +1115,13 @@ async function signIn() {
     return;
   }
   try {
+    if (API_BASE) {
+      setStatus("Checking service availability...");
+      const woke = await waitForBackendWake();
+      if (!woke) {
+        throw new Error("Backend is sleeping or unavailable. Wait 30-60 seconds and retry.");
+      }
+    }
     setStatus("Signing in...");
     const auth = await fetchJson("/v1/auth/login", {
       method: "POST",
@@ -1103,6 +1144,13 @@ async function submitOnboarding() {
   try {
     nextButton.disabled = true;
     prevButton.disabled = true;
+    if (API_BASE) {
+      setStatus("Waking backend service...");
+      const woke = await waitForBackendWake();
+      if (!woke) {
+        throw new Error("Backend is sleeping or unavailable. Wait 30-60 seconds and retry.");
+      }
+    }
     setStatus("Creating your secure workspace...");
 
     const auth = await fetchJson("/v1/auth/register", {
