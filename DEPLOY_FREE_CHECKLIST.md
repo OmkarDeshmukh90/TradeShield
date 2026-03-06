@@ -42,6 +42,10 @@ window.__TRADESHIELD_CONFIG__ = {
    - `DEMO_SCENARIO=all`
 4. Deploy.
 
+Python runtime note:
+- This repo pins Python via [runtime.txt](/e:/Capstone/runtime.txt) to `3.11.11`.
+- If Render still uses `3.14`, set env var `PYTHON_VERSION=3.11.11` in the web service and redeploy.
+
 ## 4) Database + seed
 
 After first deploy:
