@@ -1,0 +1,45 @@
+{
+  "scenario": "congestion",
+  "events": [
+    {
+      "source": "demo-replay",
+      "source_event_id": "demo-congestion-001",
+      "title": "Port congestion spikes around Strait of Malacca transit lanes",
+      "description": "Carrier advisories report queue growth and schedule slippage for vessels transiting the Malacca-connected corridor.",
+      "occurred_at": "2026-03-07T09:10:00Z",
+      "event_type": "logistics congestion",
+      "geos": ["Strait of Malacca", "Singapore", "Shanghai", "Nhava Sheva"],
+      "entities": ["port congestion", "shipping delays", "vessel queue"],
+      "severity": 0.83,
+      "confidence": 0.85,
+      "industry_tags": ["Electronics and Semiconductors", "Pharmaceuticals and APIs"],
+      "evidence": [
+        {
+          "title": "Demo Maritime Advisory",
+          "url": "https://demo.local/maritime-advisory-001",
+          "source": "Demo Maritime Desk"
+        }
+      ]
+    },
+    {
+      "source": "demo-replay",
+      "source_event_id": "demo-congestion-002",
+      "title": "Freight rate volatility rises on Asia-India lanes",
+      "description": "Spot freight rates increase as carriers rebalance capacity and prioritize high-yield cargo.",
+      "occurred_at": "2026-03-07T09:35:00Z",
+      "event_type": "logistics congestion",
+      "geos": ["South China", "India West Coast"],
+      "entities": ["freight", "carrier", "lane delays"],
+      "severity": 0.69,
+      "confidence": 0.79,
+      "industry_tags": ["Food and Edible Oils", "Metals and Steel", "Electronics and Semiconductors"],
+      "evidence": [
+        {
+          "title": "Demo Freight Bulletin",
+          "url": "https://demo.local/freight-bulletin-001",
+          "source": "Demo Freight Desk"
+        }
+      ]
+    }
+  ]
+}

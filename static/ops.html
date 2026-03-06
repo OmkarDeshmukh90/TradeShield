@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TradeShield Ops</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div>
+          <p class="eyebrow">TradeShield AI</p>
+          <h1>Operations Snapshot</h1>
+        </div>
+        <div class="topbar-actions">
+          <a class="btn btn-ghost" href="/">Back to Dashboard</a>
+          <button id="btnRefreshOps" class="btn btn-primary">Refresh Ops</button>
+        </div>
+      </div>
+    </header>
+    <main class="container">
+      <section class="card">
+        <div class="section-heading">
+          <h3>System Health</h3>
+          <p>Read-only operational metrics for demo credibility.</p>
+        </div>
+        <div id="opsMetrics" class="metrics"></div>
+      </section>
+      <section class="card">
+        <div class="section-heading">
+          <h3>Connector Cooldowns</h3>
+          <p>Sources currently in backoff/cooldown mode.</p>
+        </div>
+        <div id="cooldowns" class="stack"></div>
+      </section>
+      <section class="card">
+        <div class="section-heading">
+          <h3>Latest Runs</h3>
+          <p>Recent ingestion durations and outcomes.</p>
+        </div>
+        <div id="runs" class="stack"></div>
+      </section>
+      <p id="opsStatus" class="eyebrow"></p>
+    </main>
+    <script src="/static/ops.js" defer></script>
+  </body>
+</html>

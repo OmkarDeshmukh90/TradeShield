@@ -1,0 +1,5 @@
+Build the product foundation first: add auth, tenant isolation, RBAC, audit logs, environment separation, Postgres, and migrations. Remove demo/bootstrap routes from the live product path.
+Split ingestion out of the API: run connectors in a worker/scheduler, add source-specific dedupe/upsert logic, persist source health, and add structured logging/metrics/alerts.
+Make the recommendations genuinely client-specific: version the supply map, use inventory buffers and substitution inputs in scoring, support manual analyst overrides, and regenerate impact/playbooks when inputs or events change.
+Productize the customer workflow: CSV imports, editable supply map UI, saved alert policies, real email/WhatsApp delivery, approval workflows, notes/comments, and outcome tracking after each disruption.
+Raise the testing bar: move tests to isolated temp databases, add authz/SSRF/idempotency/dedupe tests, and add end-to-end tests for onboarding, ingestion, and alert delivery.

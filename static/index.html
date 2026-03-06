@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TradeShield AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-a"></div>
+    <div class="ambient ambient-b"></div>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div>
+          <p class="eyebrow">TradeShield AI</p>
+          <h1>Supply Chain Risk, Explained Clearly</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="live-pill">Live updates every 15 minutes</span>
+          <span id="demoBadge" class="live-pill">Demo Mode: off</span>
+          <select id="demoScenarioSelect">
+            <option value="all">All Scenarios</option>
+            <option value="tariff">Tariff Spike</option>
+            <option value="congestion">Port Congestion</option>
+          </select>
+          <button id="btnToggleDemoMode" class="btn btn-ghost">Enable Demo Mode</button>
+          <button id="btnPresentationMode" class="btn btn-ghost">Presentation Mode</button>
+          <a id="opsLink" href="#" class="btn btn-ghost" target="_blank" rel="noopener">Ops Page</a>
+          <button id="btnLogoutTop" class="btn btn-ghost hidden">Sign Out</button>
+          <button id="btnRefreshTop" class="btn btn-ghost">Refresh</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="card section-nav">
+        <div class="view-tabs">
+          <button class="btn btn-ghost tab-btn active" data-view="control">Control Tower</button>
+          <button class="btn btn-ghost tab-btn" data-view="workflow">Workflow</button>
+          <button class="btn btn-ghost tab-btn" data-view="supply">Supply Map</button>
+          <button class="btn btn-ghost tab-btn" data-view="policies">Policies</button>
+          <button class="btn btn-ghost tab-btn" data-view="ops">Ops</button>
+        </div>
+      </section>
+
+      <section class="card welcome">
+        <p class="label">Designed for operations teams, not data scientists</p>
+        <h2>See what happened, why it matters, and what to do next</h2>
+        <p>
+          TradeShield translates global disruptions into simple action plans for your business. Start guided setup to
+          create your profile in a few minutes.
+        </p>
+        <div id="heroKpis" class="hero-kpis">
+          <div class="hero-kpi"><span>Decision lag target</span><strong>&lt; 30 min</strong></div>
+          <div class="hero-kpi"><span>Freshness target</span><strong>15 min cadence</strong></div>
+          <div class="hero-kpi"><span>Output style</span><strong>3 scenario options</strong></div>
+        </div>
+        <div class="hero-actions">
+          <button id="btnOpenOnboarding" class="btn btn-primary">Start Guided Setup</button>
+          <button id="btnFocusLogin" class="btn btn-secondary">Sign In</button>
+        </div>
+        <div class="connect-row">
+          <label for="loginEmail">Existing account</label>
+          <div class="connect-controls">
+            <input id="loginEmail" type="email" placeholder="Work email" />
+            <input id="loginPassword" type="password" placeholder="Password" />
+            <button id="btnSignIn" class="btn btn-ghost">Sign In</button>
+          </div>
+        </div>
+        <p id="status"></p>
+      </section>
+
+      <section class="card" data-view-panel="control">
+        <div class="section-heading">
+          <h3><span class="section-icon">ONB</span>First 10 Minutes Checklist</h3>
+          <p>Follow this flow to get meaningful insights quickly.</p>
+        </div>
+        <div id="checklist" class="checklist"></div>
+      </section>
+
+      <section class="grid-2" data-view-panel="control">
+        <article class="card">
+          <div class="section-heading">
+            <h3><span class="section-icon">S1</span>Demo Scenario 1: Tariff Spike</h3>
+            <p>Show policy shock -> cost delta -> recommendation -> approval -> tracked outcome.</p>
+          </div>
+          <p class="item-line">Use event type <strong>tariff/policy</strong> with India import exposure.</p>
+        </article>
+        <article class="card">
+          <div class="section-heading">
+            <h3><span class="section-icon">S2</span>Demo Scenario 2: Port Congestion</h3>
+            <p>Show lane disruption -> lead-time impact -> playbook options -> mitigation tracking.</p>
+          </div>
+          <p class="item-line">Use event type <strong>logistics congestion</strong> around Malacca-linked lanes.</p>
+        </article>
+      </section>
+
+      <section class="metrics" id="metrics" data-view-panel="control"></section>
+
+      <section class="grid-2" data-view-panel="control">
+        <article class="card">
+          <div class="section-heading">
+            <h3><span class="section-icon">EVT</span>What Needs Attention Now</h3>
+            <p id="eventsSub">Recent disruptions connected to your operations.</p>
+          </div>
+          <div id="events" class="stack"></div>
+        </article>
+        <article class="card">
+          <div class="section-heading">
+            <h3><span class="section-icon">RSK</span>Recommended Priorities</h3>
+            <p>Your highest-impact items for the next decision cycle.</p>
+          </div>
+          <div id="risk" class="stack"></div>
+        </article>
+      </section>
+
+      <section class="grid-2" data-view-panel="supply policies">
+        <article class="card">
+          <div class="section-heading">
+            <h3><span class="section-icon">MAP</span>Supply Map Manager</h3>
+            <p>Edit suppliers, lanes, and SKU groups or import CSV directly.</p>
+          </div>
+          <div class="inline-actions">
+            <button id="btnLoadSupplyMap" class="btn btn-ghost">Load Current Supply Map</button>
+          </div>
+          <div id="supplyMapSummary" class="stack"></div>
+          <form id="supplyMapQuickForm" class="team-form">
+            <div class="grid-mini">
+              <label>Supplier <input id="quickSupplierName" placeholder="Supplier name" /></label>
+              <label>Country <input id="quickSupplierCountry" placeholder="Country" /></label>
+              <label>Region <input id="quickSupplierRegion" placeholder="Region" /></label>
+              <label>Commodity <input id="quickSupplierCommodity" placeholder="Commodity" /></label>
+              <label>Lane origin <input id="quickLaneOrigin" placeholder="Origin port/city" /></label>
+              <label>Lane destination <input id="quickLaneDestination" placeholder="Destination port/city" /></label>
+              <label>SKU name <input id="quickSkuName" placeholder="SKU group name" /></label>
+              <label>SKU category <input id="quickSkuCategory" placeholder="SKU category" /></label>
+            </div>
+            <div class="inline-actions">
+              <button id="btnSaveSupplyMapQuick" class="btn btn-primary" type="submit">Save Quick Update</button>
+            </div>
+          </form>
+          <form id="supplyMapCsvForm" class="team-form">
+            <label>
+              Suppliers CSV
+              <textarea id="csvSuppliers" rows="4" placeholder="name,country,region,commodity,criticality,substitution_score,lead_time_sensitivity,inventory_buffer_days"></textarea>
+            </label>
+            <label>
+              Lanes CSV
+              <textarea id="csvLanes" rows="3" placeholder="origin,destination,mode,chokepoint,importance"></textarea>
+            </label>
+            <label>
+              SKU Groups CSV
+              <textarea id="csvSkuGroups" rows="3" placeholder="name,category,monthly_volume,margin_sensitivity"></textarea>
+            </label>
+            <div class="inline-actions">
+              <button id="btnImportCsv" class="btn btn-secondary" type="submit">Import CSV</button>
+            </div>
+          </form>
+        </article>
+        <article class="card" data-view-panel="policies">
+          <div class="section-heading">
+            <h3><span class="section-icon">POL</span>Saved Alert Policies</h3>
+            <p>Configure persistent rules for dashboard, email, WhatsApp, and webhook alerts.</p>
+          </div>
+          <div id="policyList" class="stack"></div>
+          <form id="policyForm" class="team-form">
+            <div class="grid-mini">
+              <label>
+                Channel
+                <select id="policyChannel">
+                  <option value="dashboard">Dashboard</option>
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="webhook">Webhook</option>
+                </select>
+              </label>
+              <label>Target <input id="policyTarget" placeholder="control-tower / email / +91... / https://..." /></label>
+              <label>
+                Min severity
+                <select id="policySeverity">
+                  <option value="0.55">0.55</option>
+                  <option value="0.7">0.70</option>
+                  <option value="0.85">0.85</option>
+                </select>
+              </label>
+              <label>Regions (comma separated)<input id="policyRegions" placeholder="India, Red Sea" /></label>
+              <label>Industries (comma separated)<input id="policyIndustries" placeholder="Electronics and Semiconductors" /></label>
+              <label>
+                Active
+                <select id="policyActive">
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </label>
+            </div>
+            <div class="inline-actions">
+              <button id="btnCreatePolicy" class="btn btn-primary" type="submit">Save Policy</button>
+            </div>
+          </form>
+        </article>
+      </section>
+
+      <section class="card" data-view-panel="workflow">
+        <div class="section-heading">
+          <h3><span class="section-icon">WKF</span>Execution Workflow</h3>
+          <p>For the selected playbook: track approvals, team notes, and disruption outcomes.</p>
+        </div>
+        <div id="workflowPane" class="empty-state">Generate an action plan to start approvals, notes, and outcome tracking.</div>
+      </section>
+
+      <section class="card" data-view-panel="workflow">
+        <div class="section-heading">
+          <h3><span class="section-icon">PLN</span>Action Plan Assistant</h3>
+          <p>Select any priority item to generate a three-scenario action plan.</p>
+        </div>
+        <div id="playbookPane" class="empty-state">No action plan selected yet.</div>
+        <div id="explainabilityPane" class="empty-state">Generate a playbook to see why this recommendation was made.</div>
+      </section>
+
+      <section class="grid-2" data-view-panel="ops">
+        <article class="card">
+          <div class="section-heading">
+            <h3><span class="section-icon">OPS</span>Operations Console</h3>
+            <p>Keep event ingestion and alert delivery healthy.</p>
+          </div>
+          <div class="inline-actions">
+            <button id="btnRunIngestion" class="btn btn-secondary">Pull Latest Signals</button>
+            <button id="btnDispatchAlerts" class="btn btn-ghost">Process Alert Queue</button>
+          </div>
+          <div id="opsSummary" class="stack"></div>
+          <div id="sourceHealth" class="stack compact-stack"></div>
+        </article>
+        <article class="card">
+          <div class="section-heading">
+            <h3><span class="section-icon">USR</span>Workspace Team</h3>
+            <p>Add planners, analysts, and viewers who need the same control tower.</p>
+          </div>
+          <div id="teamList" class="stack"></div>
+          <form id="teamForm" class="team-form">
+            <div class="grid-mini">
+              <label>
+                Full name
+                <input id="teamName" placeholder="Example: Arjun Rao" />
+              </label>
+              <label>
+                Work email
+                <input id="teamEmail" type="email" placeholder="arjun@company.com" />
+              </label>
+              <label>
+                Role
+                <select id="teamRole">
+                  <option value="viewer">Viewer</option>
+                  <option value="analyst">Analyst</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </label>
+              <label>
+                Temporary password
+                <input id="teamPassword" type="password" placeholder="StrongPass123" />
+              </label>
+            </div>
+            <div class="inline-actions">
+              <button id="btnAddUser" class="btn btn-primary" type="submit">Add Team Member</button>
+            </div>
+          </form>
+        </article>
+      </section>
+
+      <section class="card" data-view-panel="control">
+        <div class="section-heading">
+          <h3>How It Works</h3>
+          <p>This is the decision flow your team will follow each day.</p>
+        </div>
+        <ol class="flow">
+          <li>
+            <strong>Detect:</strong> Global disruptions are collected automatically from trusted feeds.
+          </li>
+          <li>
+            <strong>Understand:</strong> TradeShield maps each event to your suppliers, routes, and product groups.
+          </li>
+          <li>
+            <strong>Decide:</strong> You get three practical options with trade-offs and confidence.
+          </li>
+          <li>
+            <strong>Act:</strong> Assign owners, execute actions, and track outcomes.
+          </li>
+        </ol>
+      </section>
+    </main>
+
+    <div id="onboardingModal" class="modal-backdrop hidden" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="wizardTitle">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Guided Setup</p>
+            <h3 id="wizardTitle">Create Your Workspace</h3>
+          </div>
+          <button id="btnCloseModal" class="btn btn-ghost" type="button">Close</button>
+        </div>
+
+        <div class="wizard-progress">
+          <span id="progressLabel">Step 1 of 3</span>
+          <div class="progress-track">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+        </div>
+
+        <form id="onboardingForm">
+          <section class="wizard-step" data-step="1">
+            <h4>Your Business Profile</h4>
+            <p>This creates your workspace and the first admin account.</p>
+            <div class="inline-actions">
+              <button id="btnPrefillSample" class="btn btn-ghost" type="button">Use Sample Inputs</button>
+            </div>
+            <label>
+              Company name
+              <input id="companyName" required placeholder="Example: Bharat Advanced Manufacturing" />
+            </label>
+            <label>
+              Your name
+              <input id="adminFullName" required placeholder="Example: Priya Mehta" />
+            </label>
+            <label>
+              Work email
+              <input id="adminEmail" type="email" required placeholder="you@company.com" />
+            </label>
+            <label>
+              Password
+              <input id="adminPassword" type="password" required placeholder="At least 10 characters" />
+            </label>
+            <label>
+              Industry
+              <select id="industrySelect"></select>
+            </label>
+            <label>
+              Decision style
+              <select id="objectiveSelect">
+                <option value="cost-balanced">Balanced cost and continuity</option>
+                <option value="continuity-first">Continuity first</option>
+                <option value="margin-protect">Margin protect</option>
+              </select>
+            </label>
+          </section>
+
+          <section class="wizard-step hidden" data-step="2">
+            <h4>Key Supply Chain Inputs</h4>
+            <p>Start with one critical supplier, one route, and one product group.</p>
+            <div class="grid-mini">
+              <label>
+                Critical supplier
+                <input id="supplierName" required placeholder="Supplier name" />
+              </label>
+              <label>
+                Supplier country
+                <input id="supplierCountry" required value="China" />
+              </label>
+              <label>
+                Supplier region
+                <input id="supplierRegion" required value="South China" />
+              </label>
+              <label>
+                Commodity
+                <input id="supplierCommodity" required value="power electronics" />
+              </label>
+              <label>
+                Main route origin
+                <input id="laneOrigin" required value="Shanghai" />
+              </label>
+              <label>
+                Main route destination
+                <input id="laneDestination" required value="Nhava Sheva" />
+              </label>
+              <label>
+                Chokepoint (optional)
+                <input id="laneChokepoint" value="Strait of Malacca" />
+              </label>
+              <label>
+                Product group
+                <input id="skuName" required value="EV drivetrain modules" />
+              </label>
+              <label>
+                Product category
+                <input id="skuCategory" required value="power electronics" />
+              </label>
+            </div>
+          </section>
+
+          <section class="wizard-step hidden" data-step="3">
+            <h4>Alert Preferences</h4>
+            <p>Choose how your team wants to be notified.</p>
+            <label>
+              Minimum severity for alerts
+              <select id="severitySelect">
+                <option value="0.55">Medium and above</option>
+                <option value="0.70">High and above</option>
+                <option value="0.85">Critical only</option>
+              </select>
+            </label>
+            <label>
+              Alert email (optional)
+              <input id="alertEmail" type="email" placeholder="alerts@yourcompany.com" />
+            </label>
+            <label>
+              WhatsApp number (optional, include country code)
+              <input id="alertWhatsapp" placeholder="+919999999999" />
+            </label>
+          </section>
+        </form>
+
+        <p id="wizardHint" class="wizard-hint">Tip: this takes about 3 minutes with sample data.</p>
+        <div class="modal-footer">
+          <button id="btnPrevStep" class="btn btn-ghost" type="button">Back</button>
+          <button id="btnNextStep" class="btn btn-primary" type="button">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./config.js"></script>
+    <script src="./app.js" defer></script>
+  </body>
+</html>

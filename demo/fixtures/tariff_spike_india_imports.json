@@ -1,0 +1,45 @@
+{
+  "scenario": "tariff",
+  "events": [
+    {
+      "source": "demo-replay",
+      "source_event_id": "demo-tariff-001",
+      "title": "India announces surprise tariff increase on selected electronics inputs",
+      "description": "A sudden customs duty change affects key electronics and semiconductor-linked components imported into India.",
+      "occurred_at": "2026-03-07T08:15:00Z",
+      "event_type": "tariff/policy",
+      "geos": ["India", "China", "South China"],
+      "entities": ["tariff", "semiconductors", "electronics inputs"],
+      "severity": 0.86,
+      "confidence": 0.87,
+      "industry_tags": ["Electronics and Semiconductors", "Automotive and Auto Components"],
+      "evidence": [
+        {
+          "title": "Demo Gazette Notice",
+          "url": "https://demo.local/tariff-notice-001",
+          "source": "Demo Gazette"
+        }
+      ]
+    },
+    {
+      "source": "demo-replay",
+      "source_event_id": "demo-tariff-002",
+      "title": "Customs clearance advisory warns of temporary processing delays",
+      "description": "Authorities indicate interim processing delays while new tariff schedules are operationalized at major ports.",
+      "occurred_at": "2026-03-07T08:40:00Z",
+      "event_type": "tariff/policy",
+      "geos": ["India", "Nhava Sheva"],
+      "entities": ["customs", "clearance delay", "duty schedule"],
+      "severity": 0.72,
+      "confidence": 0.81,
+      "industry_tags": ["Electronics and Semiconductors", "Chemicals and Specialty Chemicals"],
+      "evidence": [
+        {
+          "title": "Demo Customs Advisory",
+          "url": "https://demo.local/customs-advisory-001",
+          "source": "Demo Customs"
+        }
+      ]
+    }
+  ]
+}
