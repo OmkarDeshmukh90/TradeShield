@@ -666,6 +666,7 @@ textarea:focus {
 .modal-backdrop {
   position: fixed;
   inset: 0;
+  z-index: 1200;
   background: rgba(8, 20, 25, 0.45);
   display: grid;
   place-items: center;
