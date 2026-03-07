@@ -15,6 +15,7 @@ const DEFAULT_INDUSTRIES = [
   "Textiles and Apparel",
   "Renewable Energy Equipment",
 ];
+let backendWakePromise = null;
 
 const state = {
   accessToken: "",
@@ -34,6 +35,7 @@ const state = {
   demoScenario: "all",
   currentView: "control",
   presentationMode: false,
+  backendStatus: "sleeping",
 };
 
 const els = {
@@ -100,6 +102,8 @@ const els = {
   wizardHint: document.getElementById("wizardHint"),
   btnPrefillSample: document.getElementById("btnPrefillSample"),
   opsLink: document.getElementById("opsLink"),
+  btnWakeServer: document.getElementById("btnWakeServer"),
+  backendStatusPill: document.getElementById("backendStatusPill"),
 };
 
 function withApiBase(url) {
@@ -128,6 +132,51 @@ async function waitForBackendWake() {
     await sleep(BACKEND_WAKE_POLL_MS);
   }
   return false;
+}
+
+function renderBackendStatus() {
+  if (!els.backendStatusPill) return;
+  const status = state.backendStatus || "sleeping";
+  const label =
+    status === "awake" ? "Backend: awake" : status === "waking" ? "Backend: waking..." : "Backend: sleeping";
+  els.backendStatusPill.textContent = label;
+  els.backendStatusPill.classList.remove("backend-pill-awake", "backend-pill-waking", "backend-pill-sleeping");
+  els.backendStatusPill.classList.add(`backend-pill-${status}`);
+  if (els.btnWakeServer) {
+    const waking = status === "waking";
+    els.btnWakeServer.disabled = waking;
+    els.btnWakeServer.textContent = waking ? "Waking..." : status === "awake" ? "Wake Check" : "Wake Server";
+  }
+}
+
+function setBackendStatus(status) {
+  state.backendStatus = status;
+  renderBackendStatus();
+}
+
+async function wakeBackend(trigger = "manual") {
+  if (!API_BASE) {
+    setBackendStatus("awake");
+    return true;
+  }
+  if (backendWakePromise) return backendWakePromise;
+  backendWakePromise = (async () => {
+    setBackendStatus("waking");
+    if (trigger === "manual") {
+      setStatus("Waking backend server...");
+    }
+    const woke = await waitForBackendWake();
+    setBackendStatus(woke ? "awake" : "sleeping");
+    if (trigger === "manual") {
+      setStatus(woke ? "Backend is awake. You can continue." : "Backend did not wake yet. Retry in 30-60 seconds.");
+    }
+    return woke;
+  })();
+  try {
+    return await backendWakePromise;
+  } finally {
+    backendWakePromise = null;
+  }
 }
 
 function setStatus(message) {
@@ -377,16 +426,23 @@ async function fetchJson(url, options = {}) {
     response = await nativeFetch(withApiBase(url), { ...options, headers });
   } catch (_error) {
     if (canRetryAfterWake) {
+      setBackendStatus("waking");
       setStatus("Backend is waking up. Please wait...");
-      const woke = await waitForBackendWake();
+      const woke = await wakeBackend("auto");
       if (woke) {
+        setBackendStatus("awake");
         response = await nativeFetch(withApiBase(url), { ...options, headers });
       } else {
+        setBackendStatus("sleeping");
         throw new Error("Backend is sleeping or unavailable. Wait 30-60 seconds and retry.");
       }
     } else {
+      setBackendStatus("sleeping");
       throw new Error("Backend is sleeping or unavailable. Wait 30-60 seconds and retry.");
     }
+  }
+  if (API_BASE) {
+    setBackendStatus("awake");
   }
   if (!response.ok) {
     const text = await response.text();
@@ -1115,9 +1171,8 @@ async function signIn() {
     return;
   }
   try {
-    if (API_BASE) {
-      setStatus("Checking service availability...");
-      const woke = await waitForBackendWake();
+    if (API_BASE && state.backendStatus !== "awake") {
+      const woke = await wakeBackend("auto");
       if (!woke) {
         throw new Error("Backend is sleeping or unavailable. Wait 30-60 seconds and retry.");
       }
@@ -1145,8 +1200,7 @@ async function submitOnboarding() {
     nextButton.disabled = true;
     prevButton.disabled = true;
     if (API_BASE) {
-      setStatus("Waking backend service...");
-      const woke = await waitForBackendWake();
+      const woke = await wakeBackend("auto");
       if (!woke) {
         throw new Error("Backend is sleeping or unavailable. Wait 30-60 seconds and retry.");
       }
@@ -1616,6 +1670,11 @@ function bindEvents() {
   document.getElementById("btnOpenOnboarding").addEventListener("click", openModal);
   document.getElementById("btnFocusLogin").addEventListener("click", () => els.loginEmail.focus());
   document.getElementById("btnSignIn").addEventListener("click", signIn);
+  if (els.btnWakeServer) {
+    els.btnWakeServer.addEventListener("click", async () => {
+      await wakeBackend("manual");
+    });
+  }
   els.viewTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       state.currentView = tab.dataset.view || "control";
@@ -1746,6 +1805,10 @@ function bindEvents() {
 
 async function init() {
   bindEvents();
+  renderBackendStatus();
+  if (API_BASE) {
+    wakeBackend("auto");
+  }
   await loadIndustries();
   await hydrateSession();
   renderChecklist();

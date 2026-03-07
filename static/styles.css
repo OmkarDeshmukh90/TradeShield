@@ -100,6 +100,28 @@ h1 {
   font-size: 0.79rem;
 }
 
+.backend-pill {
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.backend-pill-awake {
+  background: #e9f9f0;
+  border-color: #b8e4cc;
+  color: #1f6b4f;
+}
+
+.backend-pill-waking {
+  background: #fff6e8;
+  border-color: #efd5a9;
+  color: #8a5f10;
+}
+
+.backend-pill-sleeping {
+  background: #f4f6f7;
+  border-color: #d5dce0;
+  color: #4f6770;
+}
+
 .container {
   max-width: 1120px;
   margin: 0 auto;
