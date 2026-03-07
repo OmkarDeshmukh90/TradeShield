@@ -114,6 +114,11 @@ This codebase now has the minimum operational foundation for a real product:
   python scripts/demo_reset.py
   ```
 
+### Frontend Offline Demo (Backend Optional)
+- Set `offlineDemo: true` in `static/config.js`, or open the app with `?offline=1`.
+- In offline demo mode, the UI uses `static/demo-fixtures/offline-demo.json`.
+- Supported flow offline: sign-in, dashboard refresh, playbook generation, approvals, comments, outcomes, policies, supply-map edits.
+
 ## Docker Deployment
 Start Postgres, web, and worker:
 ```bash
@@ -153,6 +158,9 @@ Notes for free mode:
 
 Step-by-step checklist:
 - [DEPLOY_FREE_CHECKLIST.md](/e:/Capstone/DEPLOY_FREE_CHECKLIST.md)
+
+For true no-sleep 24/7 on free tier:
+- [DEPLOY_ALWAYS_FREE_ORACLE.md](/e:/Capstone/DEPLOY_ALWAYS_FREE_ORACLE.md)
 
 ## 24/7 Cloud Deployment (Render Blueprint)
 If you want the app live even when your PC is off, use the included Render blueprint.

@@ -122,6 +122,12 @@ h1 {
   color: #4f6770;
 }
 
+#offlineModeBadge {
+  background: #fff0e1;
+  border-color: #edc89f;
+  color: #8a4f08;
+}
+
 .container {
   max-width: 1120px;
   margin: 0 auto;

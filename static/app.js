@@ -1,5 +1,7 @@
 const TOKEN_KEY = "tradeshield_access_token";
 const API_BASE = (window.__TRADESHIELD_CONFIG__?.apiBaseUrl || "").replace(/\/+$/, "");
+const OFFLINE_DEMO_FORCED =
+  window.__TRADESHIELD_CONFIG__?.offlineDemo === true || new URLSearchParams(window.location.search).get("offline") === "1";
 const nativeFetch = window.fetch.bind(window);
 const BACKEND_WAKE_TIMEOUT_MS = 70000;
 const BACKEND_WAKE_POLL_MS = 5000;
@@ -17,6 +19,7 @@ const DEFAULT_INDUSTRIES = [
   "Renewable Energy Equipment",
 ];
 let backendWakePromise = null;
+let offlineDataPromise = null;
 
 const state = {
   accessToken: "",
@@ -37,6 +40,7 @@ const state = {
   currentView: "control",
   presentationMode: false,
   backendStatus: "sleeping",
+  offlineDemoActive: false,
 };
 
 const els = {
@@ -105,6 +109,7 @@ const els = {
   opsLink: document.getElementById("opsLink"),
   btnWakeServer: document.getElementById("btnWakeServer"),
   backendStatusPill: document.getElementById("backendStatusPill"),
+  offlineModeBadge: document.getElementById("offlineModeBadge"),
 };
 
 function withApiBase(url) {
@@ -160,8 +165,15 @@ function renderBackendStatus() {
   els.backendStatusPill.classList.add(`backend-pill-${status}`);
   if (els.btnWakeServer) {
     const waking = status === "waking";
-    els.btnWakeServer.disabled = waking;
-    els.btnWakeServer.textContent = waking ? "Waking..." : status === "awake" ? "Wake Check" : "Wake Server";
+    const disabled = state.offlineDemoActive || waking;
+    els.btnWakeServer.disabled = disabled;
+    els.btnWakeServer.textContent = state.offlineDemoActive
+      ? "Offline Active"
+      : waking
+      ? "Waking..."
+      : status === "awake"
+      ? "Wake Check"
+      : "Wake Server";
   }
 }
 
@@ -171,6 +183,13 @@ function setBackendStatus(status) {
 }
 
 async function wakeBackend(trigger = "manual") {
+  if (state.offlineDemoActive) {
+    setBackendStatus("sleeping");
+    if (trigger === "manual") {
+      setStatus("Offline demo mode is active. Backend wake is not required.");
+    }
+    return true;
+  }
   if (!API_BASE) {
     setBackendStatus("awake");
     return true;
@@ -201,6 +220,339 @@ async function wakeBackend(trigger = "manual") {
   } finally {
     backendWakePromise = null;
   }
+}
+
+function renderOfflineModeBadge() {
+  if (!els.offlineModeBadge) return;
+  els.offlineModeBadge.classList.toggle("hidden", !state.offlineDemoActive);
+}
+
+function deepClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function offlineStorageKey() {
+  return "tradeshield_offline_store_v1";
+}
+
+function readOfflineStore() {
+  try {
+    const raw = localStorage.getItem(offlineStorageKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function writeOfflineStore(value) {
+  try {
+    localStorage.setItem(offlineStorageKey(), JSON.stringify(value));
+  } catch (_err) {
+    // ignore storage write issues
+  }
+}
+
+async function loadOfflineData() {
+  if (offlineDataPromise) return offlineDataPromise;
+  offlineDataPromise = (async () => {
+    const response = await nativeFetch("./demo-fixtures/offline-demo.json");
+    if (!response.ok) {
+      throw new Error("Offline fixture file is missing.");
+    }
+    const base = await response.json();
+    const stored = readOfflineStore();
+    if (stored) return stored;
+    const seeded = {
+      ...base,
+      demo: { demo_mode: true, demo_scenario: "all" },
+      current_session: deepClone(base.session),
+      current_playbook: null,
+      workflow_state: deepClone(base.workflow),
+      supply_map_state: deepClone(base.supply_map),
+      policies_state: deepClone(base.policies || []),
+      users_state: deepClone(base.users || []),
+    };
+    writeOfflineStore(seeded);
+    return seeded;
+  })();
+  return offlineDataPromise;
+}
+
+async function getOfflineData() {
+  const store = await loadOfflineData();
+  if (!store.demo) store.demo = { demo_mode: true, demo_scenario: "all" };
+  if (!store.workflow_state) store.workflow_state = deepClone(store.workflow || {});
+  if (!store.supply_map_state) store.supply_map_state = deepClone(store.supply_map || {});
+  if (!store.policies_state) store.policies_state = deepClone(store.policies || []);
+  if (!store.users_state) store.users_state = deepClone(store.users || []);
+  if (!store.current_session) store.current_session = deepClone(store.session || {});
+  writeOfflineStore(store);
+  return store;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function offlineDashboardSummary(store) {
+  const events = store.events || [];
+  const highestRisk = Math.max(...(store.risk_items || []).map((item) => Number(item.risk_score || 0)), 0);
+  const avgSeverity =
+    events.length > 0 ? events.reduce((acc, item) => acc + Number(item.severity || 0), 0) / events.length : 0;
+  return {
+    open_events: events.length,
+    average_severity: avgSeverity,
+    highest_risk_score: highestRisk,
+    latest_events: events,
+  };
+}
+
+function pickOfflinePlaybook(store, eventId) {
+  const playbook = (store.playbooks || {})[eventId];
+  if (!playbook) return null;
+  const withClient = { ...playbook, client_id: store.current_session?.client?.id || "client-demo-001" };
+  return deepClone(withClient);
+}
+
+function parseQuery(url) {
+  const [, queryString = ""] = String(url).split("?");
+  return new URLSearchParams(queryString);
+}
+
+async function offlineApi(url, options = {}) {
+  const store = await getOfflineData();
+  const method = String(options.method || "GET").toUpperCase();
+  const path = String(url).split("?")[0];
+  const payload = options.body ? JSON.parse(options.body) : null;
+  const session = store.current_session || {};
+  const clientId = session.client?.id || "client-demo-001";
+
+  if (path === "/v1/industries" && method === "GET") {
+    return { industries: store.industries || DEFAULT_INDUSTRIES };
+  }
+  if (path === "/v1/demo/status" && method === "GET") {
+    return deepClone(store.demo);
+  }
+  if (path === "/v1/demo/status" && method === "POST") {
+    store.demo.demo_mode = Boolean(payload?.demo_mode);
+    store.demo.demo_scenario = payload?.demo_scenario || "all";
+    writeOfflineStore(store);
+    return deepClone(store.demo);
+  }
+  if (path === "/v1/auth/login" && method === "POST") {
+    const email = String(payload?.email || "").toLowerCase();
+    const user = (store.users_state || []).find((item) => String(item.email || "").toLowerCase() === email);
+    if (!user) throw new Error("Invalid email or password.");
+    store.current_session = {
+      access_token: "offline-demo-token",
+      client: deepClone(store.session.client),
+      user: deepClone(user),
+    };
+    writeOfflineStore(store);
+    return deepClone(store.current_session);
+  }
+  if (path === "/v1/auth/register" && method === "POST") {
+    const fullName = payload?.full_name || "Demo User";
+    const email = payload?.email || "demo.user@tradeshield.local";
+    const createdUser = {
+      id: `user-${Date.now()}`,
+      full_name: fullName,
+      email,
+      role: "admin",
+      is_active: true,
+    };
+    store.session.client.name = payload?.company_name || "Demo Workspace";
+    store.session.client.industry = payload?.industry || store.session.client.industry;
+    store.users_state.unshift(createdUser);
+    store.current_session = {
+      access_token: "offline-demo-token",
+      client: deepClone(store.session.client),
+      user: deepClone(createdUser),
+    };
+    writeOfflineStore(store);
+    return deepClone(store.current_session);
+  }
+  if (path === "/v1/auth/me" && method === "GET") {
+    return {
+      client: deepClone(store.current_session.client || store.session.client),
+      user: deepClone(store.current_session.user || store.session.user),
+    };
+  }
+  if (path === "/v1/dashboard/summary" && method === "GET") {
+    return offlineDashboardSummary(store);
+  }
+  if (path.startsWith(`/v1/clients/${clientId}/risk-scores`) && method === "GET") {
+    return { items: deepClone(store.risk_items || []) };
+  }
+  if (path === "/v1/ops/overview" && method === "GET") {
+    const ops = deepClone(store.ops_overview || {});
+    ops.active_users = (store.users_state || []).filter((user) => user.is_active).length;
+    return ops;
+  }
+  if (path === "/v1/users" && method === "GET") {
+    return deepClone(store.users_state || []);
+  }
+  if (path === "/v1/users" && method === "POST") {
+    const user = {
+      id: `user-${Date.now()}`,
+      full_name: payload?.full_name || "New User",
+      email: payload?.email || "new.user@tradeshield.local",
+      role: payload?.role || "viewer",
+      is_active: true,
+    };
+    store.users_state.push(user);
+    writeOfflineStore(store);
+    return deepClone(user);
+  }
+  if (path === `/v1/clients/${clientId}/supply-map` && method === "GET") {
+    return deepClone(store.supply_map_state);
+  }
+  if (path === `/v1/clients/${clientId}/supply-map` && method === "POST") {
+    const map = store.supply_map_state;
+    map.supply_map_version = Number(map.supply_map_version || 1) + 1;
+    map.suppliers = [...(map.suppliers || []), ...(payload?.suppliers || []).map((item, idx) => ({ id: `sup-${Date.now()}-${idx}`, ...item }))];
+    map.lanes = [...(map.lanes || []), ...(payload?.lanes || []).map((item, idx) => ({ id: `lane-${Date.now()}-${idx}`, ...item }))];
+    map.sku_groups = [
+      ...(map.sku_groups || []),
+      ...(payload?.sku_groups || []).map((item, idx) => ({ id: `sku-${Date.now()}-${idx}`, ...item })),
+    ];
+    writeOfflineStore(store);
+    return deepClone(map);
+  }
+  if (path === `/v1/clients/${clientId}/supply-map/import-csv` && method === "POST") {
+    store.supply_map_state.supply_map_version = Number(store.supply_map_state.supply_map_version || 1) + 1;
+    writeOfflineStore(store);
+    return deepClone(store.supply_map_state);
+  }
+  if (path === "/v1/alerts/subscriptions" && method === "GET") {
+    return deepClone(store.policies_state || []);
+  }
+  if (path === "/v1/alerts/subscriptions" && method === "POST") {
+    const policy = { id: `pol-${Date.now()}`, ...payload };
+    store.policies_state.push(policy);
+    writeOfflineStore(store);
+    return deepClone(policy);
+  }
+  if (path.startsWith("/v1/alerts/subscriptions/") && method === "PATCH") {
+    const policyId = path.split("/").pop();
+    const policy = (store.policies_state || []).find((item) => item.id === policyId);
+    if (policy) Object.assign(policy, payload || {});
+    writeOfflineStore(store);
+    return deepClone(policy || {});
+  }
+  if (path.startsWith("/v1/alerts/subscriptions/") && method === "DELETE") {
+    const policyId = path.split("/").pop();
+    store.policies_state = (store.policies_state || []).filter((item) => item.id !== policyId);
+    writeOfflineStore(store);
+    return null;
+  }
+  if (path === "/v1/ingestion/run" && method === "POST") {
+    store.ops_overview.latest_run = {
+      status: "completed",
+      started_at: nowIso(),
+      finished_at: nowIso(),
+    };
+    store.ops_overview.queued_alerts = 2;
+    writeOfflineStore(store);
+    return { inserted_count: 1, updated_count: 1, queued_alerts: 2 };
+  }
+  if (path === "/v1/alerts/dispatch" && method === "POST") {
+    store.ops_overview.queued_alerts = 0;
+    writeOfflineStore(store);
+    return { delivered_count: 2, retry_count: 0, failed_count: 0, blocked_count: 0 };
+  }
+
+  const playbookGenerateMatch = path.match(/^\/v1\/clients\/([^/]+)\/playbooks\/generate$/);
+  if (playbookGenerateMatch && method === "POST") {
+    const eventId = payload?.event_id;
+    const playbook = pickOfflinePlaybook(store, eventId);
+    if (!playbook) throw new Error("No offline playbook for this event.");
+    store.current_playbook = playbook.id;
+    writeOfflineStore(store);
+    return playbook;
+  }
+
+  const playbookReadMatch = path.match(/^\/v1\/playbooks\/([^/]+)$/);
+  if (playbookReadMatch && method === "GET") {
+    const playbookId = playbookReadMatch[1];
+    const found = Object.values(store.playbooks || {}).find((item) => item.id === playbookId);
+    return deepClone(found || null);
+  }
+
+  const playbookBriefMatch = path.match(/^\/v1\/playbooks\/([^/]+)\/brief$/);
+  if (playbookBriefMatch && method === "GET") {
+    const playbookId = playbookBriefMatch[1];
+    const found = Object.values(store.playbooks || {}).find((item) => item.id === playbookId);
+    if (!found) return "No brief available.";
+    return `Decision brief (offline demo)\nPlaybook: ${found.id}\nRecommended option: ${found.recommended_option}`;
+  }
+
+  const explainMatch = path.match(/^\/v1\/clients\/([^/]+)\/events\/([^/]+)\/explainability$/);
+  if (explainMatch && method === "GET") {
+    const eventId = explainMatch[2];
+    return deepClone(store.explainability?.[eventId] || null);
+  }
+
+  const approvalsMatch = path.match(/^\/v1\/playbooks\/([^/]+)\/approvals$/);
+  if (approvalsMatch && method === "GET") {
+    const playbookId = approvalsMatch[1];
+    return deepClone(store.workflow_state?.approvals_by_playbook?.[playbookId] || []);
+  }
+
+  const approvalPatchMatch = path.match(/^\/v1\/playbooks\/([^/]+)\/approvals\/([^/]+)$/);
+  if (approvalPatchMatch && method === "PATCH") {
+    const playbookId = approvalPatchMatch[1];
+    const approvalId = approvalPatchMatch[2];
+    const approvals = store.workflow_state?.approvals_by_playbook?.[playbookId] || [];
+    const approval = approvals.find((item) => item.id === approvalId);
+    if (approval) {
+      approval.status = payload?.status || approval.status;
+      approval.decision_note = payload?.decision_note || `Updated to ${approval.status}`;
+    }
+    writeOfflineStore(store);
+    return deepClone(approval || {});
+  }
+
+  const commentsMatch = path.match(/^\/v1\/playbooks\/([^/]+)\/comments$/);
+  if (commentsMatch && method === "GET") {
+    const playbookId = commentsMatch[1];
+    return deepClone(store.workflow_state?.comments_by_playbook?.[playbookId] || []);
+  }
+  if (commentsMatch && method === "POST") {
+    const playbookId = commentsMatch[1];
+    const comment = {
+      id: `cmt-${Date.now()}`,
+      comment: payload?.comment || "",
+      created_at: nowIso(),
+    };
+    if (!store.workflow_state.comments_by_playbook[playbookId]) {
+      store.workflow_state.comments_by_playbook[playbookId] = [];
+    }
+    store.workflow_state.comments_by_playbook[playbookId].push(comment);
+    writeOfflineStore(store);
+    return deepClone(comment);
+  }
+
+  const outcomeMatch = path.match(/^\/v1\/clients\/([^/]+)\/events\/([^/]+)\/outcome$/);
+  if (outcomeMatch && method === "GET") {
+    const eventId = outcomeMatch[2];
+    return deepClone(store.workflow_state?.outcomes_by_event?.[eventId] || null);
+  }
+  if (outcomeMatch && method === "POST") {
+    const eventId = outcomeMatch[2];
+    store.workflow_state.outcomes_by_event[eventId] = {
+      ...(store.workflow_state.outcomes_by_event[eventId] || {}),
+      ...payload,
+    };
+    writeOfflineStore(store);
+    return deepClone(store.workflow_state.outcomes_by_event[eventId]);
+  }
+
+  if (path.startsWith("/v1/clients/") && path.includes("/exposures") && method === "GET") {
+    return { items: [] };
+  }
+
+  throw new Error(`Offline mode does not support: ${method} ${path}`);
 }
 
 function setStatus(message) {
@@ -389,6 +741,9 @@ function updateAuthUi() {
   });
   els.btnToggleDemoMode.disabled = !canManageUsers();
   els.demoScenarioSelect.disabled = !canManageUsers();
+  if (els.btnWakeServer) {
+    els.btnWakeServer.disabled = state.offlineDemoActive;
+  }
 }
 
 function fieldLabel(field) {
@@ -439,6 +794,9 @@ function parseApiError(status, text) {
 }
 
 async function fetchJson(url, options = {}) {
+  if (state.offlineDemoActive) {
+    return offlineApi(url, options);
+  }
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (state.accessToken) {
     headers.Authorization = `Bearer ${state.accessToken}`;
@@ -449,6 +807,13 @@ async function fetchJson(url, options = {}) {
   try {
     response = await nativeFetch(withApiBase(url), { ...options, headers });
   } catch (_error) {
+    if (OFFLINE_DEMO_FORCED) {
+      state.offlineDemoActive = true;
+      renderOfflineModeBadge();
+      setBackendStatus("sleeping");
+      setStatus("Offline demo mode active. Showing simulated data.");
+      return offlineApi(url, options);
+    }
     if (canRetryAfterWake) {
       setBackendStatus("waking");
       setStatus("Backend is waking up. Please wait...");
@@ -482,7 +847,11 @@ async function fetchJson(url, options = {}) {
   if (!text) {
     return null;
   }
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch (_err) {
+    return text;
+  }
 }
 
 function renderMetrics(summary) {
@@ -725,9 +1094,11 @@ function renderExplainability(payload) {
 }
 
 function renderDemoStatus() {
-  els.demoBadge.textContent = `Demo Mode: ${state.demoMode ? "on" : "off"} (${state.demoScenario})`;
+  const modeText = state.offlineDemoActive ? "offline" : state.demoMode ? "on" : "off";
+  els.demoBadge.textContent = `Demo Mode: ${modeText} (${state.demoScenario})`;
   els.demoScenarioSelect.value = state.demoScenario;
   els.btnToggleDemoMode.textContent = state.demoMode ? "Disable Demo Mode" : "Enable Demo Mode";
+  renderOfflineModeBadge();
 }
 
 function renderOps(overview) {
@@ -1372,11 +1743,15 @@ async function generatePlaybook(eventId) {
     state.currentEventId = eventId;
     let briefText = "";
     try {
-      const response = await nativeFetch(withApiBase(`/v1/playbooks/${playbook.id}/brief`), {
-        headers: { Authorization: `Bearer ${state.accessToken}` },
-      });
-      if (response.ok) {
-        briefText = await response.text();
+      if (state.offlineDemoActive) {
+        briefText = await offlineApi(`/v1/playbooks/${playbook.id}/brief`, { method: "GET" });
+      } else {
+        const response = await nativeFetch(withApiBase(`/v1/playbooks/${playbook.id}/brief`), {
+          headers: { Authorization: `Bearer ${state.accessToken}` },
+        });
+        if (response.ok) {
+          briefText = await response.text();
+        }
       }
     } catch (_err) {
       briefText = "";
@@ -1830,7 +2205,12 @@ function bindEvents() {
 async function init() {
   bindEvents();
   renderBackendStatus();
-  if (API_BASE) {
+  if (OFFLINE_DEMO_FORCED) {
+    state.offlineDemoActive = true;
+    setBackendStatus("sleeping");
+    renderOfflineModeBadge();
+    setStatus("Offline demo mode active. Backend is optional for this walkthrough.");
+  } else if (API_BASE) {
     const alive = await probeBackendOnce();
     if (alive) {
       setBackendStatus("awake");

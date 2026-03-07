@@ -3,4 +3,6 @@ window.__TRADESHIELD_CONFIG__ = {
   // Set this to your backend URL for split hosting, for example:
   // apiBaseUrl: "https://tradeshield-api.onrender.com",
   apiBaseUrl: "https://tradeshield-ezua.onrender.com",
+  // Set true to force full offline walkthrough mode.
+  offlineDemo: false,
 };
