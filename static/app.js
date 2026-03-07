@@ -3,6 +3,7 @@ const API_BASE = (window.__TRADESHIELD_CONFIG__?.apiBaseUrl || "").replace(/\/+$
 const nativeFetch = window.fetch.bind(window);
 const BACKEND_WAKE_TIMEOUT_MS = 70000;
 const BACKEND_WAKE_POLL_MS = 5000;
+const BACKEND_HEALTH_PROBE_TIMEOUT_MS = 2500;
 const DEFAULT_INDUSTRIES = [
   "Oil, Gas, and Petrochemicals",
   "Pharmaceuticals and APIs",
@@ -134,6 +135,21 @@ async function waitForBackendWake() {
   return false;
 }
 
+async function probeBackendOnce() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BACKEND_HEALTH_PROBE_TIMEOUT_MS);
+    const res = await nativeFetch(withApiBase("/healthz"), {
+      method: "GET",
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    return res.status < 600;
+  } catch (_err) {
+    return false;
+  }
+}
+
 function renderBackendStatus() {
   if (!els.backendStatusPill) return;
   const status = state.backendStatus || "sleeping";
@@ -157,6 +173,14 @@ function setBackendStatus(status) {
 async function wakeBackend(trigger = "manual") {
   if (!API_BASE) {
     setBackendStatus("awake");
+    return true;
+  }
+  const alreadyAwake = await probeBackendOnce();
+  if (alreadyAwake) {
+    setBackendStatus("awake");
+    if (trigger === "manual") {
+      setStatus("Backend is already awake.");
+    }
     return true;
   }
   if (backendWakePromise) return backendWakePromise;
@@ -1807,7 +1831,12 @@ async function init() {
   bindEvents();
   renderBackendStatus();
   if (API_BASE) {
-    wakeBackend("auto");
+    const alive = await probeBackendOnce();
+    if (alive) {
+      setBackendStatus("awake");
+    } else {
+      wakeBackend("auto");
+    }
   }
   await loadIndustries();
   await hydrateSession();
